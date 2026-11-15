@@ -72,6 +72,10 @@ function playGame(fd, landlord) {
   return nrec;
 }
 
+const outDir = path.dirname(path.resolve(OUT));
+if (!fs.existsSync(outDir)) {
+  fs.mkdirSync(outDir, { recursive: true });
+}
 const fd = fs.openSync(OUT, 'w');
 const end = Date.now() + MINUTES * 60000;
 let games = 0, recs = 0;
