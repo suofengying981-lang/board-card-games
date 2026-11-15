@@ -306,6 +306,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 class ClusterRequestHandler(http.server.BaseHTTPRequestHandler):
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         if url.path in ("/", "/index.html"):
