@@ -60,9 +60,21 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--tau", type=float, default=0.2)
     ap.add_argument("--rank", type=float, default=0.5, help="列表排序损失的权重")
-    ap.add_argument("--device", default="cuda")
+    ap.add_argument("--device", default="auto", help="计算设备: auto (自动优先 cuda -> mps -> cpu), 或显式指定")
     args = ap.parse_args()
-    dev = torch.device(args.device)
+
+    if args.device == "auto":
+        if torch.cuda.is_available():
+            dev_str = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            dev_str = "mps"
+        else:
+            dev_str = "cpu"
+    else:
+        dev_str = args.device
+
+    dev = torch.device(dev_str)
+    print(f"[*] 使用计算设备: {dev_str}", flush=True)
 
     paths = sorted(glob.glob(args.data))
     t0 = time.time()
