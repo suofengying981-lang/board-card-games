@@ -1,0 +1,82 @@
+{
+  "name": "cursor-translate-context-menu",
+  "displayName": "选中文本翻译",
+  "description": "编辑器右键菜单：将选中文本翻译为中文或英文",
+  "version": "0.1.0",
+  "publisher": "ying-suo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/suofengying981-lang/xiangqi.git",
+    "directory": "cursor-translate-context-menu"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:cursorTranslate.translateToChinese",
+    "onCommand:cursorTranslate.translateToEnglish"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cursorTranslate.translateToChinese",
+        "title": "翻译为中文 (Translate to Chinese)"
+      },
+      {
+        "command": "cursorTranslate.translateToEnglish",
+        "title": "翻译为英文 (Translate to English)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "cursorTranslate.translateToChinese",
+          "when": "editorHasSelection",
+          "group": "navigation@50"
+        },
+        {
+          "command": "cursorTranslate.translateToEnglish",
+          "when": "editorHasSelection",
+          "group": "navigation@51"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "cursorTranslate.translateToChinese",
+          "when": "terminalTextSelected",
+          "group": "navigation@50"
+        },
+        {
+          "command": "cursorTranslate.translateToEnglish",
+          "when": "terminalTextSelected",
+          "group": "navigation@51"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "选中文本翻译",
+      "properties": {
+        "cursorTranslate.libreTranslateUrl": {
+          "type": "string",
+          "default": "https://libretranslate.de",
+          "markdownDescription": "LibreTranslate 兼容 API 的根 URL。默认使用公共实例 [libretranslate.de](https://libretranslate.de)（**无需 API Key**，有速率限制）。可改为自建或其他公共实例。"
+        },
+        "cursorTranslate.apiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "可选：部分实例（如 libretranslate.com）需要 API Key。也可在环境变量 `LIBRETRANSLATE_API_KEY` 中设置（仅本机，勿提交到仓库）。"
+        },
+        "cursorTranslate.fallbackToMyMemory": {
+          "type": "boolean",
+          "default": true,
+          "description": "LibreTranslate 失败时，是否回退到 MyMemory 免费接口（每日约 1000 词限制，无需 Key）。"
+        }
+      }
+    }
+  }
+}
