@@ -45,9 +45,10 @@ jobs:
         working-directory: card_game/android
         run: |
           chmod +x gradlew
-          # versionCode 必须大于 card_game 已安装的 13，且只增不减。
-          # 本仓库的 github.run_number 从 1 重新计数，直接使用会降级安装失败。
-          ./gradlew assembleRelease --no-daemon -Pvc=${{ 100 + github.run_number }} -Pvn=1.0.${{ 100 + github.run_number }}
+          # versionCode 必须大于 card_game 原仓库历史上的 13，且只增不减。
+          # 加 100 偏移量，避免新仓库 run_number 重新从 1 开始导致无法覆盖安装。
+          OFFSET_VC=$((100 + GITHUB_RUN_NUMBER))
+          ./gradlew assembleRelease --no-daemon -Pvc=${OFFSET_VC} -Pvn=1.0.${OFFSET_VC}
 
       - name: 整理文件名
         run: cp card_game/android/app/build/outputs/apk/release/app-release.apk qipai.apk
@@ -64,7 +65,7 @@ jobs:
           name: 棋牌大厅 安卓版（最新）
           body: |
             斗地主 · 德州扑克 · 国标麻将 · 四川麻将，单机离线。
-            构建版本 1.0.${{ 100 + github.run_number }}，提交 ${{ github.sha }}。
+            构建编号 #${{ github.run_number }}，提交 ${{ github.sha }}。
             安装：下载 qipai.apk，允许「安装未知应用」后打开即可；之后更新直接覆盖安装，进度会保留。
           files: qipai.apk
           make_latest: true
