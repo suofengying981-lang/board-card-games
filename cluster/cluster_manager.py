@@ -61,7 +61,14 @@ PRESET_TASKS = [
         "name": "🚀 导出最新模型并生效 (Export)",
         "desc": "将最新检查点导出为浏览器端 ddz_nn.bin，完成 AI 棋力升级闭环",
         "recommended_device": "5090D / MBP",
-        "command": "python rl/export.py ckpt/last.pt ddz_nn.bin"
+        "command": "python rl/export.py rl/ckpt/last.pt ddz_nn.bin"
+    },
+    {
+        "id": "train_xiangqi",
+        "name": "♟️ 中国象棋神经网络自对弈训练",
+        "desc": "基于 NNUE 价值网络自我对弈，极速演化，专为 5090D 或 MBP 设计",
+        "recommended_device": "5090D (CUDA) / MBP (MPS)",
+        "command": "python rl_xiangqi/train.py --device auto --epochs 30 --games_per_epoch 15"
     }
 ]
 
