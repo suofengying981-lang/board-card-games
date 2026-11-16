@@ -197,9 +197,87 @@
     return score;
   }
 
-  // 简单/中等 AI：极小化极大搜索 + Alpha-Beta 剪枝 (深度 2~3)
-  function search(board, depth, alpha, beta, isBlackTurn) {
-    if (depth === 0) return { score: evaluate(board) };
+  // ---------- 神经网络价值评估 (xiangqi_nn.bin) ----------
+  let nnModel = null;
+  const PIECES_LIST = ['K', 'A', 'B', 'N', 'R', 'C', 'P', 'k', 'a', 'b', 'n', 'r', 'c', 'p'];
+  const P2IDX = {};
+  PIECES_LIST.forEach((p, i) => { P2IDX[p] = i; });
+
+  function parseNN(buf) {
+    const magic = String.fromCharCode(...new Uint8Array(buf, 0, 4));
+    if (magic !== 'XQNN') throw new Error('无效的象棋模型文件');
+    let off = 4;
+    function readF32(len) {
+      const arr = new Float32Array(buf, off, len);
+      off += len * 4;
+      return arr;
+    }
+    // w1: [256, 1261], b1: [256], w2: [128, 256], b2: [128], w3: [1, 128], b3: [1]
+    const w1 = readF32(256 * 1261);
+    const b1 = readF32(256);
+    const w2 = readF32(128 * 256);
+    const b2 = readF32(128);
+    const w3 = readF32(1 * 128);
+    const b3 = readF32(1);
+    return { w1, b1, w2, b2, w3, b3 };
+  }
+
+  async function loadNN(url = 'xiangqi_nn.bin') {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const buf = await res.arrayBuffer();
+      nnModel = parseNN(buf);
+      return nnModel;
+    } catch(e) {
+      return null;
+    }
+  }
+
+  function evaluateNN(board, isRedTurn) {
+    if (!nnModel) return evaluate(board);
+    // 构造 1261 维特征
+    const h1 = new Float32Array(256);
+    for (let i = 0; i < 256; i++) h1[i] = nnModel.b1[i];
+
+    let featIdx = 0;
+    for (let r = 0; r < 10; r++) {
+      for (let c = 0; c < 9; c++) {
+        const p = board[r][c];
+        if (p && P2IDX[p] !== undefined) {
+          const pIdx = featIdx + P2IDX[p];
+          for (let i = 0; i < 256; i++) {
+            h1[i] += nnModel.w1[i * 1261 + pIdx];
+          }
+        }
+        featIdx += 14;
+      }
+    }
+    if (isRedTurn) {
+      for (let i = 0; i < 256; i++) h1[i] += nnModel.w1[i * 1261 + 1260];
+    }
+    // ReLU
+    for (let i = 0; i < 256; i++) if (h1[i] < 0) h1[i] = 0;
+
+    // Layer 2
+    const h2 = new Float32Array(128);
+    for (let i = 0; i < 128; i++) {
+      let sum = nnModel.b2[i];
+      for (let j = 0; j < 256; j++) sum += h1[j] * nnModel.w2[i * 256 + j];
+      h2[i] = sum > 0 ? sum : 0;
+    }
+
+    // Output
+    let out = nnModel.b3[0];
+    for (let j = 0; j < 128; j++) out += h2[j] * nnModel.w3[j];
+    const val = Math.tanh(out);
+    // 从黑方视角返回分值 (黑方越有利分越高)
+    return -val * 1000;
+  }
+
+  // 简单/中等/大师 AI 搜索
+  function search(board, depth, alpha, beta, isBlackTurn, useNN = false) {
+    if (depth === 0) return { score: useNN ? evaluateNN(board, !isBlackTurn) : evaluate(board) };
 
     const moves = getAllMoves(board, !isBlackTurn);
     if (!moves.length) {
@@ -215,7 +293,7 @@
       for (const m of moves) {
         if (m.captured && m.captured.toUpperCase() === 'K') return { score: 99999, move: m };
         const next = applyMove(board, m);
-        const ev = search(next, depth - 1, alpha, beta, false).score;
+        const ev = search(next, depth - 1, alpha, beta, false, useNN).score;
         if (ev > maxEval) {
           maxEval = ev;
           bestMove = m;
@@ -229,7 +307,7 @@
       for (const m of moves) {
         if (m.captured && m.captured.toUpperCase() === 'K') return { score: -99999, move: m };
         const next = applyMove(board, m);
-        const ev = search(next, depth - 1, alpha, beta, true).score;
+        const ev = search(next, depth - 1, alpha, beta, true, useNN).score;
         if (ev < minEval) {
           minEval = ev;
           bestMove = m;
@@ -241,9 +319,10 @@
     }
   }
 
-  function aiPlay(board, level = 2) {
+  function aiPlay(board, level = 3) {
+    const useNN = (level === 3);
     const depth = level >= 2 ? 3 : 2;
-    const res = search(board, depth, -Infinity, Infinity, true);
+    const res = search(board, depth, -Infinity, Infinity, true, useNN);
     return res.move;
   }
 
@@ -255,6 +334,8 @@
     getAllMoves,
     applyMove,
     evaluate,
+    evaluateNN,
+    loadNN,
     aiPlay,
     PIECE_NAMES
   };
