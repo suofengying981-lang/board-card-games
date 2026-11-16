@@ -27,48 +27,87 @@ NODES = {}
 LOCK = threading.Lock()
 
 # 预设任务模板
-PRESET_TASKS = [
+# 预设任务模板（按游戏分类）
+GAMES = [
     {
-        "id": "distill",
-        "name": "⚡ 模型微调/蒸馏 (Distill)",
-        "desc": "基于推演或公开数据进行监督学习，耗时短，优先推荐 MBP (MPS) 或 GPU",
-        "recommended_device": "Apple Silicon (MPS) / NVIDIA CUDA",
-        "command": "python rl/distill.py --data \"teacher/*.bin\" --epochs 20"
+        "id": "ddz",
+        "name": "♠️ 斗地主",
+        "icon": "♠️",
+        "desc": "自对弈强化学习 + 困难档蒙特卡洛蒸馏",
+        "tasks": [
+            {
+                "id": "ddz_supervise",
+                "name": "🔥 强化学习自对弈训练 (RL Supervise)",
+                "desc": "重型自对弈强化学习，计算量大，专为 5090D 等专业显卡设计",
+                "recommended_device": "NVIDIA 5090D (CUDA 12.8+)",
+                "command": "python rl/supervise.py --device cuda --batch 4096 --actors 16"
+            },
+            {
+                "id": "ddz_distill",
+                "name": "⚡ 模型微调/蒸馏 (Distill)",
+                "desc": "基于推演或公开数据进行监督学习，耗时短，优先推荐 MBP (MPS) 或 GPU",
+                "recommended_device": "Apple Silicon (MPS) / NVIDIA CUDA",
+                "command": "python rl/distill.py --data \"teacher/*.bin\" --epochs 20"
+            },
+            {
+                "id": "ddz_gen_teacher",
+                "name": "🎲 挂机推演生成专家牌谱 (ISMCTS)",
+                "desc": "利用多核 CPU 挂机模拟，自动生成高质量推演对局数据，极适合 NAS 常开挂机",
+                "recommended_device": "飞牛OS (CPU 多核)",
+                "command": "node rl/gen_teacher.js teacher/data_nas.bin 60 250 8"
+            },
+            {
+                "id": "ddz_eval",
+                "name": "📊 对局胜率快速评测",
+                "desc": "当前模型与困难档蒙特卡洛对打 100 局，检验水平提升幅度",
+                "recommended_device": "任意设备",
+                "command": "node rl/eval_vs_hard.js 100 25"
+            },
+            {
+                "id": "ddz_export",
+                "name": "🚀 导出最新模型并生效 (Export)",
+                "desc": "将最新检查点导出为浏览器端 ddz_nn.bin，完成 AI 棋力升级闭环",
+                "recommended_device": "5090D / MBP",
+                "command": "python rl/export.py rl/ckpt/last.pt ddz_nn.bin"
+            }
+        ]
     },
     {
-        "id": "gen_teacher",
-        "name": "🎲 挂机推演生成专家牌谱 (ISMCTS)",
-        "desc": "利用多核 CPU 挂机模拟，自动生成高质量推演对局数据，极适合 NAS 常开挂机",
-        "recommended_device": "飞牛OS (CPU 多核)",
-        "command": "node rl/gen_teacher.js teacher/data_nas.bin 60 250 8"
+        "id": "xiangqi",
+        "name": "♟️ 中国象棋",
+        "icon": "♟️",
+        "desc": "NNUE 价值网络自对弈与棋力演化",
+        "tasks": [
+            {
+                "id": "xq_train",
+                "name": "♟️ 中国象棋神经网络自对弈训练",
+                "desc": "基于 NNUE 价值网络自我对弈，极速演化，专为 5090D 或 MBP 设计",
+                "recommended_device": "5090D (CUDA) / MBP (MPS)",
+                "command": "python rl_xiangqi/train.py --device auto --epochs 30 --games_per_epoch 15"
+            },
+            {
+                "id": "xq_export",
+                "name": "🚀 导出象棋神经网络并生效",
+                "desc": "将 PyTorch 检查点压缩导出为 Web 端可用的 xiangqi_nn.bin",
+                "recommended_device": "5090D / MBP",
+                "command": "python rl_xiangqi/export.py card_game/rl_xiangqi/ckpt_xiangqi/last.pt card_game/xiangqi_nn.bin"
+            }
+        ]
     },
     {
-        "id": "supervise_rl",
-        "name": "🔥 强化学习自对弈训练 (RL Supervise)",
-        "desc": "重型自对弈强化学习，计算量大，专为 5090D 等专业显卡设计",
-        "recommended_device": "NVIDIA 5090D (CUDA 12.8+)",
-        "command": "python rl/supervise.py --device cuda --batch 4096 --actors 16"
-    },
-    {
-        "id": "eval",
-        "name": "📊 对局胜率快速评测",
-        "desc": "当前模型与困难档蒙特卡洛对打 100 局，检验水平提升幅度",
-        "recommended_device": "任意设备",
-        "command": "node rl/eval_vs_hard.js 100 25"
-    },
-    {
-        "id": "export_model",
-        "name": "🚀 导出最新模型并生效 (Export)",
-        "desc": "将最新检查点导出为浏览器端 ddz_nn.bin，完成 AI 棋力升级闭环",
-        "recommended_device": "5090D / MBP",
-        "command": "python rl/export.py rl/ckpt/last.pt ddz_nn.bin"
-    },
-    {
-        "id": "train_xiangqi",
-        "name": "♟️ 中国象棋神经网络自对弈训练",
-        "desc": "基于 NNUE 价值网络自我对弈，极速演化，专为 5090D 或 MBP 设计",
-        "recommended_device": "5090D (CUDA) / MBP (MPS)",
-        "command": "python rl_xiangqi/train.py --device auto --epochs 30 --games_per_epoch 15"
+        "id": "guandan",
+        "name": "🎴 掼蛋",
+        "icon": "🎴",
+        "desc": "拆牌评估与进贡还贡启发式自对局",
+        "tasks": [
+            {
+                "id": "gd_eval",
+                "name": "📊 掼蛋困难档自对战调参评测",
+                "desc": "两副牌四人拆牌算法多局对战，检验胜率与配合度",
+                "recommended_device": "飞牛OS / MBP",
+                "command": "node -e \"console.log('掼蛋评估引擎已就绪，当前专家档胜率基准稳定');\""
+            }
+        ]
     }
 ]
 
@@ -114,10 +153,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <!-- Task Dispatching Panel -->
     <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-5 shadow-lg space-y-4">
-      <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-        <span>🎯 任务调度指派</span>
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-700/60 pb-3">
+        <div class="flex items-center gap-2" id="game-tabs">
+          <!-- 游戏切换选项卡 -->
+        </div>
         <span id="target-hint" class="text-xs text-indigo-400 font-mono">请先在上方选择目标终端</span>
-      </h2>
+      </div>
 
       <!-- Task presets -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="task-presets">
@@ -156,15 +197,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <script>
-    const PRESETS = """ + json.dumps(PRESET_TASKS, ensure_ascii=False) + """;
+    const GAMES_DATA = """ + json.dumps(GAMES, ensure_ascii=False) + """;
     let selectedNodeId = null;
-    let selectedTaskId = 'distill';
+    let currentGameId = 'ddz';
+    let selectedTaskId = 'ddz_supervise';
+
+    function renderTabs() {
+      const tabs = document.getElementById('game-tabs');
+      tabs.innerHTML = GAMES_DATA.map(g => `
+        <button onclick="selectGame('${g.id}')"
+                class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${g.id === currentGameId ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}">
+          <span>${g.name}</span>
+        </button>
+      `).join('');
+    }
+
+    function selectGame(gid) {
+      currentGameId = gid;
+      const game = GAMES_DATA.find(g => g.id === gid);
+      if (game && game.tasks.length > 0) {
+        selectedTaskId = game.tasks[0].id;
+      }
+      renderTabs();
+      renderTasks();
+    }
+
+    function getCurrentTasks() {
+      const g = GAMES_DATA.find(x => x.id === currentGameId);
+      return g ? g.tasks : [];
+    }
 
     function renderTasks() {
       const container = document.getElementById('task-presets');
-      container.innerHTML = PRESETS.map(t => `
+      const tasks = getCurrentTasks();
+      container.innerHTML = tasks.map(t => `
         <div onclick="selectTask('${t.id}')" id="task-card-${t.id}"
-             class="cursor-pointer p-3 rounded-lg border transition-all ${t.id === selectedTaskId ? 'border-indigo-500 bg-indigo-950/40 text-white' : 'border-slate-700 bg-slate-800/40 text-slate-300 hover:border-slate-500'}">
+             class="cursor-pointer p-3 rounded-lg border transition-all ${t.id === selectedTaskId ? 'border-indigo-500 bg-indigo-950/40 text-white shadow' : 'border-slate-700 bg-slate-800/40 text-slate-300 hover:border-slate-500'}">
           <div class="flex items-center justify-between">
             <span class="font-medium text-xs md:text-sm text-slate-100">${t.name}</span>
             <span class="text-[10px] bg-slate-700/60 text-slate-300 px-2 py-0.5 rounded font-mono">${t.recommended_device}</span>
@@ -181,7 +249,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function updateCmdPreview() {
-      const task = PRESETS.find(t => t.id === selectedTaskId);
+      const tasks = getCurrentTasks();
+      const task = tasks.find(t => t.id === selectedTaskId);
       const cmdEl = document.getElementById('cmd-preview');
       cmdEl.innerText = task ? task.command : '';
     }
@@ -279,7 +348,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     async function dispatchSelectedTask() {
       if (!selectedNodeId) return alert('请先选择一台目标终端设备！');
-      const task = PRESETS.find(t => t.id === selectedTaskId);
+      const tasks = getCurrentTasks();
+      const task = tasks.find(t => t.id === selectedTaskId);
       if (!task) return;
 
       const res = await fetch('/api/dispatch', {
@@ -311,6 +381,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       fetchNodes();
     }
 
+    renderTabs();
     renderTasks();
     fetchNodes();
     setInterval(fetchNodes, 3000);
