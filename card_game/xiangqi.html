@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2c1a0e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="中国象棋">
+<title>中国象棋</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #1f130b; }
+body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; color: #fff;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+button { font: inherit; cursor: pointer; }
+#app { position: fixed; inset: 0; display: flex; flex-direction: column;
+  background: radial-gradient(ellipse at 50% 40%, #442a17 0%, #2c1a0e 60%, #170d06 100%);
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+#top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 50px;
+  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px; background: rgba(0, 0, 0, .35); font-size: 13px; }
+#top .l { display: flex; flex-direction: column; min-width: 90px; }
+#top a { color: #ffd36b; text-decoration: none; padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, .12); font-size: 13px; font-weight: bold; }
+.ibtn { width: 34px; height: 34px; border-radius: 10px; border: 0; color: #fff; font-size: 16px; background: rgba(255, 255, 255, .16); }
+#status { text-align: center; padding: 6px 10px; font-size: 14px; min-height: 30px; background: rgba(0, 0, 0, .25); line-height: 1.4; color: #fcebd9; }
+#status b { color: #ffd54a; }
+#boardWrap { flex: 1; min-height: 0; display: grid; place-items: center; padding: 6px; }
+svg { width: 100%; height: 100%; max-width: 440px; filter: drop-shadow(0 8px 24px rgba(0,0,0,0.6)); }
+
+#bar { display: flex; gap: 12px; justify-content: center; padding: 10px 14px calc(env(safe-area-inset-bottom) + 12px); background: rgba(0, 0, 0, .35); }
+#bar button { flex: 1; max-width: 140px; padding: 10px 0; border-radius: 12px; border: 0; color: #fff; font-weight: 700; font-size: 15px; background: rgba(255, 255, 255, .16); }
+#bar button.main { background: #b83b26; }
+#bar button:disabled { opacity: .4; }
+
+/* 菜单弹窗 */
+.overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(0, 0, 0, .65); }
+.overlay.hidden { display: none; }
+.sheet { width: min(88vw, 360px); max-height: 88vh; overflow: auto; background: #382213; border: 1px solid rgba(255, 255, 255, .2); border-radius: 18px; padding: 20px 16px; }
+.sheet h2 { margin: 0 0 14px; font-size: 18px; text-align: center; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0; font-size: 14px; }
+.seg { display: flex; gap: 4px; }
+.seg button { padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .25); background: transparent; color: #fff; font-size: 13px; }
+.seg button.on { background: #b83b26; border-color: #b83b26; }
+.sheet .go { width: 100%; margin-top: 14px; padding: 12px; border-radius: 12px; border: 0; background: #b83b26; color: #fff; font-weight: 700; font-size: 15px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <div class="l">
+      <span style="font-weight:bold;font-size:15px">中国象棋</span>
+      <span id="rec" style="color:#d9b897;font-size:11px">战绩: 0胜 / 0局</span>
+    </div>
+    <a href="index.html">大厅</a>
+    <button class="ibtn" id="menuBtn" type="button" aria-label="菜单">☰</button>
+  </div>
+
+  <div id="status">红方执先，请点击红子走棋</div>
+
+  <div id="boardWrap">
+    <svg id="svg" viewBox="0 0 450 500"></svg>
+  </div>
+
+  <div id="bar">
+    <button id="undoBtn" type="button">悔棋</button>
+    <button id="newBtn" class="main" type="button">新局</button>
+  </div>
+</div>
+
+<!-- 菜单设置 -->
+<div id="menuModal" class="overlay hidden">
+  <div class="sheet">
+    <h2>游戏设置</h2>
+    <div class="row">
+      <span>电脑难度</span>
+      <div class="seg" id="diffSeg">
+        <button data-v="1">新手</button>
+        <button data-v="2" class="on">普通</button>
+      </div>
+    </div>
+    <button class="go" id="closeMenuBtn">确定</button>
+  </div>
+</div>
+
+<script src="xiangqi-engine.js"></script>
+<script>
+(function() {
+  'use strict';
+  const E = window.XiangqiEngine;
+  let board = E.initBoard();
+  let history = []; // 走子历史供悔棋
+  let selected = null; // 当前选中的坐标 [r, c]
+  let validMoves = []; // 当前选中的棋子可走的步
+  let turn = 'red'; // 'red' or 'black'
+  let gameOver = false;
+  let aiLevel = 2;
+
+  const STAT_KEY = 'xiangqi-v1';
+  function getStats() {
+    try { return JSON.parse(localStorage.getItem(STAT_KEY) || '{"wins":0,"games":0}'); } catch(e) { return {"wins":0,"games":0}; }
+  }
+  function saveStats(win) {
+    const s = getStats();
+    s.games++;
+    if (win) s.wins++;
+    localStorage.setItem(STAT_KEY, JSON.stringify(s));
+    updateRec();
+  }
+  function updateRec() {
+    const s = getStats();
+    document.getElementById('rec').innerText = `战绩: ${s.wins}胜 / ${s.games}局`;
+  }
+  updateRec();
+
+  // SVG 棋盘绘制常量
+  // 9列: x 25 .. 425 (步长 50)
+  // 10行: y 25 .. 475 (步长 50)
+  const X0 = 25, Y0 = 25, STEP = 50;
+  function getCoord(r, c) { return [X0 + c * STEP, Y0 + r * STEP]; }
+
+  function renderBoard() {
+    const svg = document.getElementById('svg');
+    let h = `
+      <defs>
+        <radialGradient id="wood" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#e9c894"/>
+          <stop offset="100%" stop-color="#c89d5f"/>
+        </radialGradient>
+        <radialGradient id="pieceRed" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#fff8ec"/>
+          <stop offset="70%" stop-color="#f0ddbf"/>
+          <stop offset="100%" stop-color="#cca87a"/>
+        </radialGradient>
+        <radialGradient id="pieceBlack" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#fffdf7"/>
+          <stop offset="70%" stop-color="#f5e4cb"/>
+          <stop offset="100%" stop-color="#cca87a"/>
+        </radialGradient>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="1" dy="3" stdDeviation="2" flood-color="rgba(0,0,0,0.5)"/>
+        </filter>
+      </defs>
+      <!-- 棋盘背景 -->
+      <rect x="5" y="5" width="440" height="490" rx="14" fill="url(#wood)" stroke="#583113" stroke-width="4"/>
+      <rect x="20" y="20" width="410" height="460" fill="none" stroke="#683d1c" stroke-width="2"/>
+    `;
+
+    // 横线
+    for (let r = 0; r < 10; r++) {
+      const y = Y0 + r * STEP;
+      h += `<line x1="${X0}" y1="${y}" x2="${X0 + 8 * STEP}" y2="${y}" stroke="#683d1c" stroke-width="1.6"/>`;
+    }
+    // 竖线 (楚河汉界截断)
+    for (let c = 0; c < 9; c++) {
+      const x = X0 + c * STEP;
+      if (c === 0 || c === 8) {
+        h += `<line x1="${x}" y1="${Y0}" x2="${x}" y2="${Y0 + 9 * STEP}" stroke="#683d1c" stroke-width="1.6"/>`;
+      } else {
+        h += `<line x1="${x}" y1="${Y0}" x2="${x}" y2="${Y0 + 4 * STEP}" stroke="#683d1c" stroke-width="1.6"/>`;
+        h += `<line x1="${x}" y1="${Y0 + 5 * STEP}" x2="${x}" y2="${Y0 + 9 * STEP}" stroke="#683d1c" stroke-width="1.6"/>`;
+      }
+    }
+    // 九宫斜线
+    h += `<line x1="${X0+3*STEP}" y1="${Y0}" x2="${X0+5*STEP}" y2="${Y0+2*STEP}" stroke="#683d1c" stroke-width="1.6"/>`;
+    h += `<line x1="${X0+5*STEP}" y1="${Y0}" x2="${X0+3*STEP}" y2="${Y0+2*STEP}" stroke="#683d1c" stroke-width="1.6"/>`;
+    h += `<line x1="${X0+3*STEP}" y1="${Y0+7*STEP}" x2="${X0+5*STEP}" y2="${Y0+9*STEP}" stroke="#683d1c" stroke-width="1.6"/>`;
+    h += `<line x1="${X0+5*STEP}" y1="${Y0+7*STEP}" x2="${X0+3*STEP}" y2="${Y0+9*STEP}" stroke="#683d1c" stroke-width="1.6"/>`;
+
+    // 楚河汉界文字
+    h += `<text x="110" y="258" font-size="20" font-weight="bold" fill="#683d1c" font-family="serif" letter-spacing="8">楚 河</text>`;
+    h += `<text x="270" y="258" font-size="20" font-weight="bold" fill="#683d1c" font-family="serif" letter-spacing="8">漢 界</text>`;
+
+    // 绘制可行走指示圈
+    for (const m of validMoves) {
+      const [tx, ty] = getCoord(m.to[0], m.to[1]);
+      if (m.captured) {
+        h += `<circle cx="${tx}" cy="${ty}" r="22" fill="none" stroke="#d63031" stroke-width="3" stroke-dasharray="4 3"/>`;
+      } else {
+        h += `<circle cx="${tx}" cy="${ty}" r="8" fill="#27ae60" opacity="0.8"/>`;
+      }
+    }
+
+    // 绘制棋子
+    for (let r = 0; r < 10; r++) {
+      for (let c = 0; c < 9; c++) {
+        const p = board[r][c];
+        const [x, y] = getCoord(r, c);
+        const isSel = selected && selected[0] === r && selected[1] === c;
+
+        if (p) {
+          const red = E.isRed(p);
+          const color = red ? '#ba1616' : '#1f1f1f';
+          const bg = red ? 'url(#pieceRed)' : 'url(#pieceBlack)';
+          const name = E.PIECE_NAMES[p];
+
+          h += `
+            <g class="piece-node" data-r="${r}" data-c="${c}" style="cursor:pointer" filter="url(#shadow)">
+              <circle cx="${x}" cy="${y}" r="21" fill="${bg}" stroke="#784f27" stroke-width="2"/>
+              <circle cx="${x}" cy="${y}" r="18" fill="none" stroke="${red ? '#e06060' : '#888'}" stroke-width="1"/>
+              ${isSel ? `<circle cx="${x}" cy="${y}" r="23" fill="none" stroke="#f1c40f" stroke-width="3"/>` : ''}
+              <text x="${x}" y="${y + 7}" font-size="22" font-weight="bold" fill="${color}"
+                    text-anchor="middle" font-family="Noto Serif SC, Songti SC, STSong, serif">${name}</text>
+            </g>
+          `;
+        } else {
+          // 点击空白交叉点
+          h += `<rect x="${x-22}" y="${y-22}" width="44" height="44" fill="transparent" class="empty-node" data-r="${r}" data-c="${c}" style="cursor:pointer"/>`;
+        }
+      }
+    }
+
+    svg.innerHTML = h;
+
+    // 绑定交互
+    svg.querySelectorAll('.piece-node').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const r = +el.getAttribute('data-r'), c = +el.getAttribute('data-c');
+        onPointClick(r, c);
+      });
+    });
+    svg.querySelectorAll('.empty-node').forEach(el => {
+      el.addEventListener('click', () => {
+        const r = +el.getAttribute('data-r'), c = +el.getAttribute('data-c');
+        onPointClick(r, c);
+      });
+    });
+  }
+
+  function onPointClick(r, c) {
+    if (gameOver || turn !== 'red') return;
+    const p = board[r][c];
+
+    // 如果之前选中了红棋，且点击了合法目的地
+    if (selected) {
+      const move = validMoves.find(m => m.to[0] === r && m.to[1] === c);
+      if (move) {
+        executeMove(move);
+        return;
+      }
+    }
+
+    // 选中自己的红子
+    if (p && E.isRed(p)) {
+      selected = [r, c];
+      validMoves = E.getMoves(board, r, c);
+      renderBoard();
+      return;
+    }
+
+    // 取消选中
+    selected = null;
+    validMoves = [];
+    renderBoard();
+  }
+
+  function executeMove(move) {
+    history.push({ board: board.map(row => row.slice()), move });
+    board = E.applyMove(board, move);
+    selected = null;
+    validMoves = [];
+    renderBoard();
+
+    // 检查吃将
+    if (move.captured && move.captured.toUpperCase() === 'K') {
+      gameOver = true;
+      const win = E.isRed(move.piece);
+      document.getElementById('status').innerHTML = win ? '🎉 <b>红方胜利！</b> 你赢了电脑！' : '💀 <b>黑方胜利！</b> 电脑获胜！';
+      saveStats(win);
+      return;
+    }
+
+    turn = (turn === 'red') ? 'black' : 'red';
+    if (turn === 'black') {
+      document.getElementById('status').innerHTML = '电脑思考中... ⏳';
+      setTimeout(makeAiMove, 200);
+    } else {
+      document.getElementById('status').innerHTML = '轮到红方走棋';
+    }
+  }
+
+  function makeAiMove() {
+    if (gameOver) return;
+    const move = E.aiPlay(board, aiLevel);
+    if (!move) {
+      gameOver = true;
+      document.getElementById('status').innerHTML = '🎉 电脑无子可动，<b>红方胜利！</b>';
+      saveStats(true);
+      return;
+    }
+    executeMove(move);
+  }
+
+  // 悔棋
+  document.getElementById('undoBtn').addEventListener('click', () => {
+    if (history.length < 2 || gameOver) return;
+    history.pop(); // 撤销电脑一步
+    const prev = history.pop(); // 撤销玩家一步
+    board = prev.board;
+    selected = null;
+    validMoves = [];
+    turn = 'red';
+    gameOver = false;
+    document.getElementById('status').innerHTML = '已悔棋，轮到红方走棋';
+    renderBoard();
+  });
+
+  // 新局
+  document.getElementById('newBtn').addEventListener('click', () => {
+    board = E.initBoard();
+    history = [];
+    selected = null;
+    validMoves = [];
+    turn = 'red';
+    gameOver = false;
+    document.getElementById('status').innerHTML = '新局开始：红方执先，请点击红子走棋';
+    renderBoard();
+  });
+
+  // 菜单
+  const menuModal = document.getElementById('menuModal');
+  document.getElementById('menuBtn').addEventListener('click', () => menuModal.classList.remove('hidden'));
+  document.getElementById('closeMenuBtn').addEventListener('click', () => menuModal.classList.add('hidden'));
+  document.querySelectorAll('#diffSeg button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#diffSeg button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      aiLevel = +b.getAttribute('data-v');
+    });
+  });
+
+  renderBoard();
+})();
+</script>
+</body>
+</html>

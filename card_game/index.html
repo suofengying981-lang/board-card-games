@@ -106,6 +106,12 @@ a.game:active { transform: scale(.97); background: rgba(255, 255, 255, .14); }
       <span class="desc">陆战棋：暗子对阵，铁路、行营、地雷与炸弹</span>
       <span class="stat" id="st-jq"></span>
     </a>
+    <a class="game" href="xiangqi.html">
+      <span class="badge b2">帥</span>
+      <span class="name">中国象棋</span>
+      <span class="desc">楚河汉界，九宫搏杀，双档电脑 AI 对弈与悔棋</span>
+      <span class="stat" id="st-xq"></span>
+    </a>
   </div>
 
   <div class="foot" id="foot">
@@ -133,6 +139,8 @@ a.game:active { transform: scale(.97); background: rgba(255, 255, 255, .14); }
   if (tq && tq.games) set('st-tq', tq.wins + ' 胜 / ' + tq.games + ' 局');
   const jq = read('junqi-v1');
   if (jq && jq.games) set('st-jq', jq.wins + ' 胜 / ' + jq.games + ' 局');
+  const xq = read('xiangqi-v1');
+  if (xq && xq.games) set('st-xq', xq.wins + ' 胜 / ' + xq.games + ' 局');
   const gd = read('guandan-v1');
   if (gd && gd.matches) set('st-gd', gd.won + ' 胜 / ' + gd.matches + ' 场');
   set('st-mj', '');
