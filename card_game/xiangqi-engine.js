@@ -326,6 +326,102 @@
     return res.move;
   }
 
+  // 中文纵线编号
+  const RED_COLS = ['九', '八', '七', '六', '五', '四', '三', '二', '一'];
+  const NUM_CHARS = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+
+  // 生成中文象棋记谱 (如: 炮二平五, 马8进7)
+  function moveToNotation(board, move) {
+    if (!move) return '';
+    const { from, to, piece } = move;
+    const [fr, fc] = from;
+    const [tr, tc] = to;
+    const red = isRed(piece);
+    const name = PIECE_NAMES[piece];
+    const type = piece.toUpperCase();
+
+    // 检查是否有同列同名棋子
+    let sameColCount = 0;
+    let isFront = false;
+    for (let r = 0; r < 10; r++) {
+      if (r !== fr && board[r][fc] === piece) {
+        sameColCount++;
+        if (red ? (r < fr) : (r > fr)) {
+          isFront = false;
+        } else {
+          isFront = true;
+        }
+      }
+    }
+
+    let prefix = '';
+    if (sameColCount === 1) {
+      prefix = (isFront ? '前' : '后') + name;
+    } else {
+      const fromColStr = red ? RED_COLS[fc] : (fc + 1).toString();
+      prefix = name + fromColStr;
+    }
+
+    let action = '';
+    let target = '';
+
+    if (tr === fr) {
+      action = '平';
+      target = red ? RED_COLS[tc] : (tc + 1).toString();
+    } else {
+      const isAdvance = red ? (tr < fr) : (tr > fr);
+      action = isAdvance ? '进' : '退';
+      // 直进直退棋子: 车、炮、兵/卒、将/帅 走步数；斜走棋子: 马、相/象、仕/士 走目标列
+      if (type === 'R' || type === 'C' || type === 'P' || type === 'K') {
+        const step = Math.abs(tr - fr);
+        target = red ? NUM_CHARS[step] : step.toString();
+      } else {
+        target = red ? RED_COLS[tc] : (tc + 1).toString();
+      }
+    }
+
+    return prefix + action + target;
+  }
+
+  // 分析/推荐走法 (提供给人类提示或评棋)
+  function getTopMoves(board, isRedTurn = true, level = 3, topN = 3) {
+    const useNN = (level === 3);
+    const depth = level >= 2 ? 3 : 2;
+    const moves = getAllMoves(board, isRedTurn);
+    if (!moves.length) return [];
+
+    const scoredMoves = [];
+    for (const m of moves) {
+      if (m.captured && m.captured.toUpperCase() === 'K') {
+        scoredMoves.push({ move: m, score: isRedTurn ? 99999 : -99999 });
+        continue;
+      }
+      const next = applyMove(board, m);
+      const res = search(next, depth - 1, -Infinity, Infinity, isRedTurn, useNN);
+      scoredMoves.push({ move: m, score: res.score });
+    }
+
+    // 红方视角：分数越低越好（因为黑方搜索返回负数越小表示红方越大）
+    if (isRedTurn) {
+      scoredMoves.sort((a, b) => a.score - b.score);
+    } else {
+      scoredMoves.sort((a, b) => b.score - a.score);
+    }
+
+    return scoredMoves.slice(0, topN).map(item => ({
+      move: item.move,
+      notation: moveToNotation(board, item.move),
+      score: item.score
+    }));
+  }
+
+  // 盘面当前局势评估 (-1000 到 +1000，正数红优，负数黑优)
+  function getPositionScore(board) {
+    // evaluate 返回从黑方视角的得分 (黑优为正，红优为负)
+    const raw = -evaluate(board);
+    return Math.round(raw / 10); // 转换为兵价值（如 +30 相当于 3 个兵的优势）
+  }
+
   return {
     initBoard,
     isRed,
@@ -337,6 +433,10 @@
     evaluateNN,
     loadNN,
     aiPlay,
+    moveToNotation,
+    getTopMoves,
+    getPositionScore,
     PIECE_NAMES
   };
 });
+
