@@ -77,22 +77,48 @@ def main():
     print(f"[*] 使用计算设备: {dev_str}", flush=True)
 
     paths = sorted(glob.glob(args.data))
+    if not paths and not os.path.isabs(args.data):
+        # 兼容相对路径从 rl/ 目录下或根目录下查找
+        alt = os.path.join(os.path.dirname(__file__), "..", args.data)
+        paths = sorted(glob.glob(os.path.normpath(alt)))
+        if not paths:
+            alt2 = os.path.join(os.path.dirname(__file__), args.data)
+            paths = sorted(glob.glob(os.path.normpath(alt2)))
+
+    if not paths:
+        print(f"[-] 错误：在路径 '{args.data}' 下未找到任何数据文件！请先生成推演数据或指定正确路径。", flush=True)
+        return
+
     t0 = time.time()
     S, M, NC, A, T = load_files(paths)
-    print(f"读入 {len(paths)} 个文件：{len(S)} 个决策，平均候选 {NC.mean():.2f}，{time.time() - t0:.0f}s", flush=True)
+    print(f"读入 {len(paths)} 个文件：{len(S)} 个决策，平均候选 {NC.mean():.2f}，耗时 {time.time() - t0:.1f}s", flush=True)
 
     rng = np.random.RandomState(0)
     perm = rng.permutation(len(S))
-    nval = max(1000, len(S) // 20)
+    nval = max(min(1000, len(S) // 5), 1)
     val_idx, tr_idx = perm[:nval], perm[nval:]
     tS, tA, tT = (torch.from_numpy(x).to(dev) for x in (S, A, T))
     tM = torch.from_numpy(M).to(dev)
     mask_all = (torch.arange(CMAX).unsqueeze(0) < torch.from_numpy(NC).unsqueeze(1)).to(dev)
 
-    ck = torch.load(args.init, map_location=dev)
     nets = [QNet().to(dev) for _ in range(3)]
-    for n, sd in zip(nets, ck["models"]):
-        n.load_state_dict(sd)
+    init_path = args.init
+    if not os.path.exists(init_path):
+        # 尝试检查相对于脚本目录的位置
+        alt_init = os.path.join(os.path.dirname(__file__), init_path)
+        if os.path.exists(alt_init):
+            init_path = alt_init
+
+    step_val = 0
+    if os.path.exists(init_path):
+        print(f"[*] 从检查点加载初始权重: {init_path}", flush=True)
+        ck = torch.load(init_path, map_location=dev)
+        for n, sd in zip(nets, ck["models"]):
+            n.load_state_dict(sd)
+        step_val = ck.get("step", 0)
+    else:
+        print(f"[*] 检查点 {init_path} 不存在，从零初始化权重进行监督训练", flush=True)
+
     opts = [torch.optim.Adam(n.parameters(), lr=args.lr) for n in nets]
 
     def evaluate(idx):
@@ -139,7 +165,7 @@ def main():
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 10.0)
                 opt.step()
         show(f"第 {ep + 1:2d} 轮 ({time.time() - t1:.0f}s)")
-        torch.save({"models": [n.state_dict() for n in nets], "opts": [o.state_dict() for o in opts], "step": ck.get("step", 0)},
+        torch.save({"models": [n.state_dict() for n in nets], "opts": [o.state_dict() for o in opts], "step": step_val},
                    os.path.join(args.out, "last.tmp"))
         os.replace(os.path.join(args.out, "last.tmp"), os.path.join(args.out, "last.pt"))
 
