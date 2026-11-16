@@ -169,7 +169,7 @@ def main():
     # 导出为轻量级 JavaScript/Web 二进制权重
     from export import export_to_bin
     export_to_bin(os.path.join(args.out, "last.pt"), args.export)
-    print(f"[✓] 训练全部完成！总耗时: {time.time() - t_start:.1f}s，模型已导出至 {args.export}", flush=True)
+    print(f"[OK] 训练全部完成！总耗时: {time.time() - t_start:.1f}s，模型已导出至 {args.export}", flush=True)
 
 if __name__ == "__main__":
     main()
