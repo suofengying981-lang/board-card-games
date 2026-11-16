@@ -55,6 +55,13 @@ PRESET_TASKS = [
         "desc": "当前模型与困难档蒙特卡洛对打 100 局，检验水平提升幅度",
         "recommended_device": "任意设备",
         "command": "node rl/eval_vs_hard.js 100 25"
+    },
+    {
+        "id": "export_model",
+        "name": "🚀 导出最新模型并生效 (Export)",
+        "desc": "将最新检查点导出为浏览器端 ddz_nn.bin，完成 AI 棋力升级闭环",
+        "recommended_device": "5090D / MBP",
+        "command": "python rl/export.py ckpt/last.pt ddz_nn.bin"
     }
 ]
 
